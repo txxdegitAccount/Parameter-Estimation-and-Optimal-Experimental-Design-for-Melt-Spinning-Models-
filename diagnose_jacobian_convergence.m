@@ -1,26 +1,9 @@
-%% diagnose_jacobian_convergence.m
-% Diagnostic for the melt-spinning reduced 3-by-2 Jacobian.
-% Required in the SAME directory: steady_solution.m
-% Uses the TWO already-polished shooting values printed by the previous run;
-% does NOT perform fzero, does NOT redo the 20304 samples.
-%
-% Why a new diagnostic?
-% The previous test changed the output-grid size and ode45 tolerances
-% simultaneously, so its ||dJ|| values cannot identify the source of error.
-%
-% Outputs:
-%   jacobian_diagnostic_summary.csv
-%   jacobian_diagnostic_results.mat
-%
-% NOTE: Differences between numerical results are NOT rigorous error bounds.
-
 clear; clc;
 script_dir = fileparts(mfilename('fullpath'));
 addpath(script_dir);
 assert(exist('steady_solution','file') == 2, ...
     'Please put steady_solution.m in the same folder as this script.');
 
-% Points and polished F values FROM THE USER'S PREVIOUS MATLAB LOG.
 theta_list = [1.96052631579, 90; ...
               1.50697406141, 90.0022904285];
 F_list = [277.70514930754; 277.70568418116];
@@ -35,19 +18,17 @@ u_a = u_a_abs/u_0;
 base_param = [W,T_0,A_0,T_a,u_a,2000,u_0];
 target=3730;
 
-% Baseline settings, SAME for all three isolated comparisons.
 N0=2000; rt0=1e-9; at0=1e-10;
 hx0=1e-8; ht0=1e-7;
 
-% Each column specifies [intervals, RelTol, AbsTol, stateFD, paramRelativeFD]
 cases = [
-  2000, 1e-8,  1e-9,  hx0,   ht0;   % Tolerance only
+  2000, 1e-8,  1e-9,  hx0,   ht0;   
   2000, 1e-9,  1e-10, hx0,   ht0;
   2000, 1e-10, 1e-11, hx0,   ht0;
-  1000, rt0,   at0,   hx0,   ht0;   % Output-grid only
+  1000, rt0,   at0,   hx0,   ht0;  
   2000, rt0,   at0,   hx0,   ht0;
   4000, rt0,   at0,   hx0,   ht0;
-  N0,   rt0,   at0,   1e-7,  1e-6;  % Finite-difference steps only
+  N0,   rt0,   at0,   1e-7,  1e-6;  
   N0,   rt0,   at0,   1e-8,  1e-7;
   N0,   rt0,   at0,   1e-9,  1e-8];
 case_group = [repmat({'ToleranceOnly'},3,1); ...
@@ -67,8 +48,6 @@ for ip=1:size(theta_list,1)
     fprintf('\n========== %s ==========',point_names{ip});
     fprintf('\nA_op=%.12g, A_c=%.12g, fixed F=%.14g\n',theta(1),theta(2),F);
 
-    % Check whether the physical temperature trajectory crosses thresholds
-    % used by the piecewise laws in steady_solution.m.
     param=base_param;
     opts=odeset('RelTol',rt0,'AbsTol',at0);
     try
@@ -134,7 +113,7 @@ for ip=1:size(theta_list,1)
             'BoundaryResidual',r,'dRdF',rp,'Rank',jr, ...
             'SigmaMin',smin,'NormJ',jnorm, ...
             'DeltaFromBaseline',dr,'DeltaOverSigmaMin',ratio, ...
-            'Success',good,'ErrorMessage',errmsg); %#ok<SAGROW>
+            'Success',good,'ErrorMessage',errmsg); 
     end
 end
 
@@ -146,7 +125,6 @@ save(outmat,'summary','Jacobian','theta_list','F_list','cases');
 fprintf('\nSaved: %s\nSaved: %s\n',outcsv,outmat);
 fprintf('Note: These are empirical comparison errors, not certified error bounds.\n');
 
-%% Local helpers
 function r=get_residual(F,theta,param,target,opts)
     [t,X]=ode45(@steady_solution,[0,1],[1;1;1;F;0;0],opts,param,theta);
     require_endpoint(t,'Shooting residual');

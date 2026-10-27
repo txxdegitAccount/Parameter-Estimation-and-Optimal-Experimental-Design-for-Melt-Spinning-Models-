@@ -1,9 +1,6 @@
 clc; clear; close all;
-rng(1);   % 固定随机种子，保证不同版本使用完全相同的 LHS 样本
+rng(1);   
 
-%% =========================
-% 0) 基本参数
-%% =========================
 W = 0.009;
 T_0 = 298;
 A_0 = pi*(0.22*0.1)^2 / 4;
@@ -23,31 +20,27 @@ u_target_single = 3730;
 F_init = 270;
 
 %% =========================
-% 1) 参数采样
-% 标准 LHS + 手动补角点/边界点
-% theta(:,1)=A_op, theta(:,2)=A_c
-%% =========================
-M_lhs = 10000;   % LHS 主体样本数
-n_edge = 20;     % 每条边补点数
 
-% ---- 标准 LHS 主体采样 ----
+M_lhs = 10000;   
+n_edge = 20;     
+
 theta_samples = lhsdesign(M_lhs, 2);
 theta_samples(:,1) = 1.0 + theta_samples(:,1) * (2.0 - 1.0);   % A_op in [1,2]
 theta_samples(:,2) = 90  + theta_samples(:,2) * (120 - 90);    % A_c  in [90,120]
 
-% ---- 四个角点 [A_op, A_c] ----
+% 四个角点 
 corner_pts = [1.0,  90;
               1.0, 120;
               2.0,  90;
               2.0, 120];
 
-% ---- 四条边界点 ----
+% 四条边界点 
 edge1 = [1.0 * ones(n_edge,1), linspace(90,120,n_edge)'];   % A_op = 1
 edge2 = [2.0 * ones(n_edge,1), linspace(90,120,n_edge)'];   % A_op = 2
 edge3 = [linspace(1,2,n_edge)', 90  * ones(n_edge,1)];      % A_c  = 90
 edge4 = [linspace(1,2,n_edge)', 120 * ones(n_edge,1)];      % A_c  = 120
 
-% ---- 合并并去重 ----
+% 合并并去重 -
 theta_samples = [theta_samples;
                  corner_pts;
                  edge1;
@@ -64,9 +57,6 @@ disp(theta_samples(1:5,:));
 fprintf('LHS主体点数 = %d\n', M_lhs);
 fprintf('补边界后总点数 M = %d\n', M);
 
-%% =========================
-% 2) 结果存储
-%% =========================
 F0_all        = nan(M,1);
 r_all         = nan(M,1);
 shoot_ok      = false(M,1);
@@ -85,9 +75,6 @@ sigma_max_all    = nan(M,1);
 rank_tol  = 1e-8;
 sigma_tol = 1e-8;
 
-%% =========================
-% 3) 启动并行池 + 主循环（52核服务器推荐）
-%% =========================
 N_workers = 48;   % 52个物理核，先用48个worker，给系统/MATLAB主进程留4核
 
 poolobj = gcp('nocreate');
@@ -129,16 +116,13 @@ end
 elapsed_time = toc;
 fprintf('\n并行主循环耗时 = %.2f min\n', elapsed_time/60);
 
-% 先保存数值结果，避免后续作图异常导致长时间计算结果丢失
 result_file = fullfile(pwd, 'sigma_results_M10000_consistent.mat');
 save(result_file, 'theta_samples', 'F0_all', 'r_all', 'shoot_ok', ...
     'rp_all', 'rp_ok_all', 'J_all', 'rankJ_all', 'fullrank_all', ...
     'sigma_all', 'sigma_min_all', 'sigma_max_all', 'elapsed_time', '-v7.3');
 fprintf('数值结果已保存：%s\n', result_file);
 
-%% =========================
-% 4) 统计信息
-%% =========================
+
 fprintf('总采样点数 M = %d\n', M);
 fprintf('成功拿到 F0 的点数 = %d\n', sum(shoot_ok));
 fprintf('r_p 检验通过点数 = %d\n', sum(rp_ok_all));
@@ -167,9 +151,7 @@ if any(valid_rpstat)
     fprintf('|r_p|: median = %.3e\n', median(abs(rp_all(valid_rpstat))));
 end
 
-%% =========================
-% 5) 有效数据
-%% =========================
+
 valid_idx = shoot_ok & rp_ok_all & isfinite(sigma_min_all) & (sigma_min_all > 0);
 
 A_op_plot   = theta_samples(valid_idx, 1);
@@ -177,17 +159,12 @@ A_c_plot    = theta_samples(valid_idx, 2);
 sigma_plot  = sigma_min_all(valid_idx);
 log_sigma   = log10(sigma_plot);
 
-%% =========================
-% 图片保存文件夹
-%% =========================
+
 fig_folder = fullfile(pwd, 'figures_M10000_consistent');
 if ~exist(fig_folder, 'dir')
     mkdir(fig_folder);
 end
 
-%% ========================= 
-% 6) 图1：d_min(J) 散点图 
-%% ========================= 
 if any(valid_idx) 
     fig1 = figure('Color','w','Position',[80,80,860,650]); 
  
@@ -199,7 +176,6 @@ if any(valid_idx)
     xlabel('$A_c$', 'Interpreter','latex', 'FontSize',20); 
     ylabel('$A_{op}$', 'Interpreter','latex', 'FontSize',20); 
 
-    % d_min(J) 全部斜体
     title('\it d_{min}(J)', ...
         'Interpreter','tex', 'FontSize',18, 'FontWeight','normal'); 
  
@@ -221,9 +197,6 @@ if any(valid_idx)
     exportgraphics(fig1, fullfile(fig_folder, 'd_min_scatter.pdf'), 'ContentType', 'vector'); 
 end 
  
-%% ========================= 
-% 7) 图2：log10(d_min(J)) 散点图 
-%% ========================= 
 if any(valid_idx) 
     fig2 = figure('Color','w','Position',[100,100,860,650]); 
  
@@ -235,7 +208,6 @@ if any(valid_idx)
     xlabel('$A_c$', 'Interpreter','latex', 'FontSize',20); 
     ylabel('$A_{op}$', 'Interpreter','latex', 'FontSize',20); 
 
-    % log 保持正体，仅 d_min(J) 斜体
     title('log_{10}(\it d_{min}(J)\rm)', ...
         'Interpreter','tex', 'FontSize',18, 'FontWeight','normal'); 
  
@@ -256,10 +228,7 @@ if any(valid_idx)
     exportgraphics(fig2, fullfile(fig_folder, 'log_d_min_scatter.png'), 'Resolution', 600); 
     exportgraphics(fig2, fullfile(fig_folder, 'log_d_min_scatter.pdf'), 'ContentType', 'vector'); 
 end 
- 
-%% ========================= 
-% 8) 图3：d_min(J) 热图 
-%% ========================= 
+
 if any(valid_idx) && nnz(valid_idx) >= 8 
     Ac_grid  = linspace(min(theta_samples(:,2)), max(theta_samples(:,2)), 300); 
     Aop_grid = linspace(min(theta_samples(:,1)), max(theta_samples(:,1)), 300); 
@@ -302,9 +271,6 @@ if any(valid_idx) && nnz(valid_idx) >= 8
         'ContentType', 'image', 'Resolution', 600); 
 end 
  
-%% ========================= 
-% 9) 图4：log10(d_min(J)) 热图 
-%% ========================= 
 if any(valid_idx) && nnz(valid_idx) >= 8 
     Ac_grid  = linspace(min(theta_samples(:,2)), max(theta_samples(:,2)), 300); 
     Aop_grid = linspace(min(theta_samples(:,1)), max(theta_samples(:,1)), 300); 
@@ -347,9 +313,7 @@ if any(valid_idx) && nnz(valid_idx) >= 8
         'ContentType', 'image', 'Resolution', 600); 
 end 
  
-%% ========================= 
-% 10) 图5：d_min(J) 的 3D 散点图 
-%% ========================= 
+
 if any(valid_idx) 
     fig5 = figure('Color','w','Position',[160,160,880,680]); 
  
@@ -365,7 +329,6 @@ if any(valid_idx)
     zlabel('\it d_{min}(J)', ...
         'Interpreter','tex', 'FontSize',18); 
  
-    % 前面的文字正体，仅 d_min(J) 斜体
     title('3D view of \it d_{min}(J)\rm', ...
         'Interpreter','tex', ...
         'FontSize',18, 'FontWeight','normal'); 
@@ -392,9 +355,6 @@ if any(valid_idx)
     exportgraphics(fig5, fullfile(fig_folder, 'd_min_3D_scatter.pdf'), 'ContentType', 'vector'); 
 end 
  
-%% ========================= 
-% 11) 图6：log10(d_min(J)) 的 3D 曲面图 
-%% ========================= 
 if any(valid_idx) && nnz(valid_idx) >= 8 
     Ac_grid  = linspace(min(theta_samples(:,2)), max(theta_samples(:,2)), 220); 
     Aop_grid = linspace(min(theta_samples(:,1)), max(theta_samples(:,1)), 220); 
@@ -442,9 +402,6 @@ if any(valid_idx) && nnz(valid_idx) >= 8
         'ContentType', 'image', 'Resolution', 600); 
 end
 
-%% =========================
-% 12) 诊断图：log10|r(F0,theta)|
-%% =========================
 valid_r_plot = isfinite(r_all);
 if any(valid_r_plot)
     fig7 = figure('Color','w','Position',[200,200,860,650]);
@@ -467,9 +424,6 @@ if any(valid_r_plot)
     exportgraphics(fig7, fullfile(fig_folder, 'diagnostic_log_boundary_residual.png'), 'Resolution', 600);
 end
 
-%% =========================
-% 13) 诊断图：log10|r_p|
-%% =========================
 valid_rp_plot = isfinite(rp_all);
 if any(valid_rp_plot)
     fig8 = figure('Color','w','Position',[220,220,860,650]);
@@ -519,20 +473,14 @@ end
 fprintf('  diagnostic_log_boundary_residual.png\n');
 fprintf('  diagnostic_log_rp.png\n');
 
-%% =========================================================
-% 子函数1：高精度一致的 fmincon shooting
-% 保留原 fmincon 方法，只统一 ode45 的 RelTol/AbsTol
-%% =========================================================
 function [F_0, r_star, has_F0] = get_force_new(numeric_param, truth_value, u_target, F_init)
 
     try
         F_0 = get_force_consistent(numeric_param, truth_value, u_target, F_init);
         F_0 = F_0(1);
 
-        % 使用与灵敏度方程相同的高精度再次检查边界残差
         r_star = boundary_residual(F_0, numeric_param, truth_value, u_target);
 
-        % 原非线性约束为 r^2 <= 1e-6，因此等价于 |r| <= 1e-3
         res_tol = 1e-3;
         has_F0 = isfinite(F_0) && isfinite(r_star) && abs(r_star) <= res_tol;
 
@@ -543,9 +491,6 @@ function [F_0, r_star, has_F0] = get_force_new(numeric_param, truth_value, u_tar
     end
 end
 
-%% =========================================================
-% 子函数1.1：保留原始 fmincon，只将内部 ode45 精度统一为 1e-8/1e-9
-%% =========================================================
 function F_0 = get_force_consistent(numeric_param, truth_value, u_target, F_init)
 
     options = optimoptions('fmincon', ...
@@ -565,9 +510,6 @@ function F_0 = get_force_consistent(numeric_param, truth_value, u_target, F_init
         numeric_param, truth_value), options);
 end
 
-%% =========================================================
-% 子函数1.2：目标函数
-%% =========================================================
 function err = obj_function_consistent(u_target, numeric_param, param_value, F)
 
     m   = numeric_param(6);
@@ -576,7 +518,6 @@ function err = obj_function_consistent(u_target, numeric_param, param_value, F)
 
     u_list = zeros(size(u_target));
 
-    % 与后续 boundary_residual / sensitivity ODE 使用完全相同的精度
     odeOptions = odeset('RelTol',1e-8,'AbsTol',1e-9);
 
     for index = 1:length(u_target)
@@ -590,9 +531,6 @@ function err = obj_function_consistent(u_target, numeric_param, param_value, F)
     err = sum((u_list - u_target).^2);
 end
 
-%% =========================================================
-% 子函数1.3：非线性约束
-%% =========================================================
 function [c, ceq] = nonlcon_consistent(x, u_target, tolerance, numeric_param, param_value)
 
     m   = numeric_param(6);
@@ -601,7 +539,6 @@ function [c, ceq] = nonlcon_consistent(x, u_target, tolerance, numeric_param, pa
 
     u_list = zeros(size(u_target));
 
-    % 与目标函数、边界残差、灵敏度方程使用相同精度
     odeOptions = odeset('RelTol',1e-8,'AbsTol',1e-9);
 
     for index = 1:length(u_target)
@@ -617,9 +554,6 @@ function [c, ceq] = nonlcon_consistent(x, u_target, tolerance, numeric_param, pa
     ceq = [];
 end
 
-%% =========================================================
-% 子函数2：边界残差
-%% =========================================================
 function r = boundary_residual(F, numeric_param, truth_value, u_target)
 
     m   = numeric_param(6);
@@ -635,9 +569,6 @@ function r = boundary_residual(F, numeric_param, truth_value, u_target)
     r = u_end - u_target;
 end
 
-%% =========================================================
-% 子函数3：计算局部灵敏度矩阵 J
-%% =========================================================
 function [F_0, r_star, has_F0, rp, rp_ok, J] = compute_local_jacobian( ...
     param_value, numeric_param, u_target_single, F_init)
 

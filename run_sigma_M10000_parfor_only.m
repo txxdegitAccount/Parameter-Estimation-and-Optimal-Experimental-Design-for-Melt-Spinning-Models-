@@ -1,9 +1,5 @@
 clc; clear; close all;
-% rng(1);
 
-%% =========================
-% 0) 基本参数
-%% =========================
 W = 0.009;
 T_0 = 298;
 A_0 = pi*(0.22*0.1)^2 / 4;
@@ -22,32 +18,24 @@ numeric_param = [W, T_0, A_0, T_a, u_a, numPoints-1, u_0];
 u_target_single = 3730;
 F_init = 270;
 
-%% =========================
-% 1) 参数采样
-% 标准 LHS + 手动补角点/边界点
-% theta(:,1)=A_op, theta(:,2)=A_c
-%% =========================
-M_lhs = 10000;   % LHS 主体样本数
-n_edge = 20;     % 每条边补点数
 
-% ---- 标准 LHS 主体采样 ----
+M_lhs = 10000;  
+n_edge = 20;     
+
 theta_samples = lhsdesign(M_lhs, 2);
 theta_samples(:,1) = 1.0 + theta_samples(:,1) * (2.0 - 1.0);   % A_op in [1,2]
 theta_samples(:,2) = 90  + theta_samples(:,2) * (120 - 90);    % A_c  in [90,120]
 
-% ---- 四个角点 [A_op, A_c] ----
 corner_pts = [1.0,  90;
               1.0, 120;
               2.0,  90;
               2.0, 120];
 
-% ---- 四条边界点 ----
 edge1 = [1.0 * ones(n_edge,1), linspace(90,120,n_edge)'];   % A_op = 1
 edge2 = [2.0 * ones(n_edge,1), linspace(90,120,n_edge)'];   % A_op = 2
 edge3 = [linspace(1,2,n_edge)', 90  * ones(n_edge,1)];      % A_c  = 90
 edge4 = [linspace(1,2,n_edge)', 120 * ones(n_edge,1)];      % A_c  = 120
 
-% ---- 合并并去重 ----
 theta_samples = [theta_samples;
                  corner_pts;
                  edge1;
@@ -64,9 +52,6 @@ disp(theta_samples(1:5,:));
 fprintf('LHS主体点数 = %d\n', M_lhs);
 fprintf('补边界后总点数 M = %d\n', M);
 
-%% =========================
-% 2) 结果存储
-%% =========================
 F0_all        = nan(M,1);
 r_all         = nan(M,1);
 shoot_ok      = false(M,1);
@@ -85,7 +70,6 @@ sigma_max_all    = nan(M,1);
 rank_tol  = 1e-8;
 sigma_tol = 1e-8;
 
-% 固定使用 8 个并行 worker（只并行最外层采样点）
 N_workers = 8;
 poolobj = gcp('nocreate');
 if isempty(poolobj)
@@ -95,9 +79,6 @@ elseif poolobj.NumWorkers ~= N_workers
     parpool('local', N_workers);
 end
 
-%% =========================
-% 3) 主循环
-%% =========================
 parfor m_idx = 1:M
     theta_m = theta_samples(m_idx,:);
 
@@ -125,9 +106,6 @@ parfor m_idx = 1:M
     end
 end
 
-%% =========================
-% 4) 统计信息
-%% =========================
 fprintf('总采样点数 M = %d\n', M);
 fprintf('成功拿到 F0 的点数 = %d\n', sum(shoot_ok));
 fprintf('r_p 检验通过点数 = %d\n', sum(rp_ok_all));
@@ -141,9 +119,6 @@ if any(valid_sigma)
     fprintf('sigma_min: max    = %.3e\n', max(sigma_min_all(valid_sigma)));
 end
 
-%% =========================
-% 5) 有效数据
-%% =========================
 valid_idx = isfinite(sigma_min_all) & (sigma_min_all > 0);
 
 A_op_plot   = theta_samples(valid_idx, 1);
@@ -151,17 +126,11 @@ A_c_plot    = theta_samples(valid_idx, 2);
 sigma_plot  = sigma_min_all(valid_idx);
 log_sigma   = log10(sigma_plot);
 
-%% =========================
-% 图片保存文件夹
-%% =========================
 fig_folder = fullfile(pwd, 'figures_M10000_parfor_only');
 if ~exist(fig_folder, 'dir')
     mkdir(fig_folder);
 end
 
-%% ========================= 
-% 6) 图1：d_min(J) 散点图 
-%% ========================= 
 if any(valid_idx) 
     fig1 = figure('Color','w','Position',[80,80,860,650]); 
  
@@ -173,7 +142,6 @@ if any(valid_idx)
     xlabel('$A_c$', 'Interpreter','latex', 'FontSize',20); 
     ylabel('$A_{op}$', 'Interpreter','latex', 'FontSize',20); 
 
-    % d_min(J) 全部斜体
     title('\it d_{min}(J)', ...
         'Interpreter','tex', 'FontSize',18, 'FontWeight','normal'); 
  
@@ -195,9 +163,6 @@ if any(valid_idx)
     exportgraphics(fig1, fullfile(fig_folder, 'd_min_scatter.pdf'), 'ContentType', 'vector'); 
 end 
  
-%% ========================= 
-% 7) 图2：log10(d_min(J)) 散点图 
-%% ========================= 
 if any(valid_idx) 
     fig2 = figure('Color','w','Position',[100,100,860,650]); 
  
@@ -209,7 +174,6 @@ if any(valid_idx)
     xlabel('$A_c$', 'Interpreter','latex', 'FontSize',20); 
     ylabel('$A_{op}$', 'Interpreter','latex', 'FontSize',20); 
 
-    % log 保持正体，仅 d_min(J) 斜体
     title('log_{10}(\it d_{min}(J)\rm)', ...
         'Interpreter','tex', 'FontSize',18, 'FontWeight','normal'); 
  

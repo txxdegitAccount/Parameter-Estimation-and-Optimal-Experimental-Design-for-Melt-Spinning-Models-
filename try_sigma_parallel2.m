@@ -16,8 +16,6 @@ u_0 = W / (A_0 * rho_0);
 T_a = T_a_abs / T_0;
 u_a = u_a_abs / u_0;
 
-% 保留该字段仅用于兼容原 numeric_param 的结构。
-% 优化后的 ODE 只需要终点，因此不再强制输出 1001 个 z 点。
 numPoints = 1001;
 numeric_param = [W, T_0, A_0, T_a, u_a, numPoints-1, u_0];
 
@@ -25,8 +23,7 @@ u_target_single = 3730;
 F_init = 270;
 
 %% =========================
-% 并行设置
-%% =========================
+% 并行
 % 当前电脑使用 8 个 workers
 N_workers = 8;
 

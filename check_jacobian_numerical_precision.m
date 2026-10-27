@@ -1,23 +1,3 @@
-%% check_jacobian_numerical_precision.m
-% Numerical robustness check of the reduced 3-by-2 Jacobian.
-%
-% Required files in the SAME folder:
-%   sampling_refinement_interior_results.mat (from your 20,304-point test)
-%   steady_solution.m
-%
-% The code selects the parameter point with the smallest singular value in
-% the whole set, plus the worst interior point.  For each parameter point,
-% it recomputes the same reduced Jacobian using increasingly strict ODE
-% tolerances.  The shooting variable F is polished only once and then kept
-% identical between numerical precision levels.
-%
-% Caution: ode45 is adaptive.  The output mesh [1000, 2000, 4000] is not
-% by itself an integration-accuracy guarantee; decreasing RelTol/AbsTol is
-% the primary numerical precision test here.
-%
-% This is an empirical convergence/robustness check, NOT a rigorous global
-% error bound for all parameter values.
-
 clear; clc;
 script_dir = fileparts(mfilename('fullpath'));
 addpath(script_dir);
@@ -36,7 +16,6 @@ assert(size(P,2)==2 && size(P,1)==numel(sv), ...
     'Parameter points and singular value arrays do not match.');
 assert(any(valid & ~boundary), 'No valid interior samples in MAT file.');
 
-% Select two relevant samples (do not recompute 20,304 Jacobians)
 valid_indices = find(valid);
 [~,i_min] = min(sv(valid_indices));
 k_global = valid_indices(i_min);
@@ -45,7 +24,6 @@ interior_indices = find(valid & ~boundary);
 k_interior = interior_indices(i_min);
 selected_rows = unique([k_global; k_interior], 'stable');
 
-% Numerical/model settings used in sampling_refinement_interior.m
 W = 0.009;
 T_0 = 298;
 A_0 = pi*(0.22*0.1)^2/4;
@@ -55,21 +33,19 @@ rho_0 = 1.356 - 5e-4*T_0;
 u_0 = W/(A_0*rho_0);
 T_a = T_a_abs/T_0;
 u_a = u_a_abs/u_0;
-% numeric_param(6) is replaced for every output-grid level below.
+
 param_base = [W, T_0, A_0, T_a, u_a, 1000, u_0];
 u_target = 3730;
 F_init = 270;
 
-% Test configurations: baseline, tighter, tightest.  Keep numerical
-% differentiation steps fixed while assessing ode45 tolerance stability.
+
 mesh_intervals = [1000; 2000; 4000];
 rel_tols       = [1e-8; 1e-9; 1e-10];
 abs_tols       = [1e-9; 1e-10; 1e-11];
-finite_dx      = 1e-8;    % original state finite-difference increment
-finite_dtheta  = 1e-7;    % original relative parameter increment
+finite_dx      = 1e-8;    
+finite_dtheta  = 1e-7;    
 n_levels = numel(mesh_intervals);
 
-% Collect results in a table, one row per parameter point and precision.
 R = struct('PointType',{}, 'SampleIndex',{}, 'Aop',{}, 'Ac',{}, ...
     'Intervals',{}, 'RelTol',{}, 'AbsTol',{}, 'ShootResidual',{}, ...
     'SigmaMin',{}, 'SigmaMax',{}, 'Rank',{}, 'NormJ',{}, ...
@@ -89,8 +65,6 @@ for ip = 1:numel(selected_rows)
     fprintf('[A_op,A_c] = [%.12g, %.12g]; saved min sigma = %.12e\n', ...
         theta(1),theta(2),sv(index));
 
-    % Solve shooting condition to high precision ONCE. Keeping F fixed
-    % isolates differences due to the sensitivity integration / tolerance.
     shoot_opts = odeset('RelTol',1e-11,'AbsTol',1e-12);
     [F, residual_best] = solve_shooting(theta,param_base, ...
         u_target,F_init,shoot_opts);
@@ -147,15 +121,13 @@ for ip = 1:numel(selected_rows)
         entry.RelDeltaJ = relDeltaJ;
         entry.DeltaSigmaMin = deltaSigma;
         entry.DeltaJoverMinSigma = ratio;
-        R(end+1) = entry; %#ok<SAGROW>
+        R(end+1) = entry; 
 
         J_by_point{ip,lev} = J;
         prev_J = J;
         prev_sigma = s_min;
     end
 
-    % Additional check for finite-difference sensitivity approximation.
-    % Here ODE tolerance and output mesh are fixed to the finest setting.
     numeric_param = param_base;
     numeric_param(6)=4000;
     opt = odeset('RelTol',1e-10,'AbsTol',1e-11);
@@ -186,7 +158,6 @@ fprintf('Saved CSV: %s\nSaved MAT: %s\n',csv_path,mat_path);
 fprintf(['Note: successive solver differences are empirical stability ', ...
     'indicators, NOT certified truncation-error bounds.\n']);
 
-%% Local functions
 function [F, residual] = solve_shooting(theta, numeric_param, ...
     target, F_init, ode_opts)
     objective = @(x) shooting_residual(x,theta,numeric_param, ...
@@ -196,7 +167,7 @@ function [F, residual] = solve_shooting(theta, numeric_param, ...
     [F,~] = fmincon(objective,F_init,[],[],[],[],[],[], ...
         @(x) constraint_shoot(x,theta,numeric_param,target,ode_opts),options);
     residual = shooting_residual(F,theta,numeric_param,target,ode_opts);
-    % Tighten shooting condition using scalar root finding if possible.
+    
     try
         F_candidate = fzero(@(x) shooting_residual(x,theta,numeric_param, ...
             target,ode_opts), F, optimset('Display','off','TolX',1e-10));
@@ -218,7 +189,6 @@ function [c,ceq] = constraint_shoot(F,theta,numeric_param,target,ode_opts)
 end
 
 function r = shooting_residual(F,theta,numeric_param,target,ode_opts)
-    % A two-point output span is enough: ode45 determines its own steps.
     [~,X] = ode45(@steady_solution,[0 1],[1 1 1 F 0 0], ...
         ode_opts,numeric_param,theta);
     u0 = numeric_param(7);

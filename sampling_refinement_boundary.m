@@ -1,11 +1,3 @@
-%% Boundary sampling-refinement test for local structural identifiability
-% Uses saved baseline (10000 LHS + 76 boundary points = 10076).
-% Only calculates newly inserted boundary points for n_edge=39 and 77.
-% Keep this script, steady_solution.m, and sigma_results_M10000_consistent.mat
-% in the same MATLAB folder.
-%
-% This is a numerical refinement check, not a rigorous error bound.
-
 clc;
 script_dir = fileparts(mfilename('fullpath'));
 addpath(script_dir);
@@ -26,7 +18,6 @@ ok_all = logical(S.fullrank_all(:)) & ...
 assert(size(theta_all,1) == 10076, ...
     'Expected 10076 saved sampling points; found %d.', size(theta_all,1));
 
-% Same melt-spinning model settings as run_sigma_M10000_parfor_consistent.m
 W = 0.009;
 T_0 = 298;
 A_0 = pi*(0.22*0.1)^2 / 4;
@@ -43,7 +34,7 @@ F_init = 270;
 rank_tol = 1e-8;
 sigma_tol = 1e-8;
 
-levels = [20, 39, 77];      % number of points per edge
+levels = [20, 39, 77];     
 n_levels = numel(levels);
 count_all = zeros(n_levels,1);
 rank2_all = zeros(n_levels,1);
@@ -51,7 +42,6 @@ min_sv_all = nan(n_levels,1);
 failure_all = zeros(n_levels,1);
 new_point_count = zeros(n_levels,1);
 
-% Original saved result
 count_all(1) = size(theta_all, 1);
 rank2_all(1) = sum(ok_all);
 failure_all(1) = count_all(1) - rank2_all(1);
@@ -62,7 +52,6 @@ end
 fprintf('\nBaseline: N=%d, full-rank=%d, min singular value=%.9e\n', ...
     count_all(1), rank2_all(1), min_sv_all(1));
 
-% Calculate only points that have not been evaluated at a previous level
 theta_added = zeros(0,2);
 sigma_added = zeros(0,1);
 rank_added = zeros(0,1);
@@ -72,7 +61,6 @@ for i_level = 2:n_levels
     n_edge = levels(i_level);
     boundary_samples = generate_boundary_samples(n_edge);
 
-    % Tolerant matching prevents float round-off duplicating old edge points.
     is_existing = ismembertol(boundary_samples, theta_all, ...
         1e-10, 'ByRows', true);
     new_points = boundary_samples(~is_existing,:);
@@ -98,7 +86,6 @@ for i_level = 2:n_levels
                             (sigma_new(k) > sigma_tol);
             end
         catch
-            % Failed points remain NaN and are counted as failures.
         end
     end
 
@@ -146,7 +133,6 @@ save(mat_file, 'summary', 'theta_added', 'sigma_added', ...
 
 fprintf('\nSaved summary: %s\nSaved values: %s\n', csv_file, mat_file);
 
-%% Helper: four rectangle edges, with each corner counted once
 function boundary_samples = generate_boundary_samples(n_edge)
     x = linspace(1, 2, n_edge)';     % A_op
     y = linspace(90, 120, n_edge)';  % A_c
@@ -158,18 +144,12 @@ function boundary_samples = generate_boundary_samples(n_edge)
         'rows', 'stable');
 end
 
-%% Original high-accuracy shooting and sensitivity calculations (unchanged)
-
 function [F_0, r_star, has_F0] = get_force_new(numeric_param, truth_value, u_target, F_init)
 
     try
         F_0 = get_force_consistent(numeric_param, truth_value, u_target, F_init);
         F_0 = F_0(1);
-
-        % 使用与灵敏度方程相同的高精度再次检查边界残差
         r_star = boundary_residual(F_0, numeric_param, truth_value, u_target);
-
-        % 原非线性约束为 r^2 <= 1e-6，因此等价于 |r| <= 1e-3
         res_tol = 1e-3;
         has_F0 = isfinite(F_0) && isfinite(r_star) && abs(r_star) <= res_tol;
 

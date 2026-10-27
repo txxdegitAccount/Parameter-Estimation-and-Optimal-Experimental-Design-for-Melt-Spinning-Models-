@@ -1,17 +1,3 @@
-%% Interior LHS sampling-refinement test for structural identifiability
-% Requires:
-%   1. sampling_refinement_results.mat  (created by boundary refinement)
-%   2. steady_solution.m
-% Place this script in the same folder.
-%
-% Existing 10304 points (10000 interior + 304 boundary) are reused.
-% We append two independent random Latin-hypercube batches of 5000 points
-% each to check 10000 -> 15000 -> 20000 interior points.
-% No previously evaluated points are recomputed.
-%
-% IMPORTANT: a sampling refinement is numerical evidence, not a rigorous
-% mathematical error bound over the full continuous parameter rectangle.
-
 clc;
 script_dir = fileparts(mfilename('fullpath'));
 addpath(script_dir);
@@ -34,7 +20,6 @@ assert(size(theta_all, 1) == 10304, ...
 assert(numel(sigma_all) == 10304 && numel(rank_all) == 10304 ...
        && numel(ok_all) == 10304, 'The saved arrays have inconsistent sizes.');
 
-% Same model settings and rank tolerance as boundary refinement
 W = 0.009;
 T_0 = 298;
 A_0 = pi*(0.22*0.1)^2 / 4;
@@ -80,7 +65,6 @@ min_sigma_boundary = nan(n_levels,1);
 min_sigma_new = nan(n_levels,1);
 new_point_count = zeros(n_levels,1);
 
-% Report existing numerical results at 10000 interior + 304 boundary points
 total_points(1) = numel(sigma_all);
 fullrank_count(1) = sum(ok_all);
 failure_count(1) = total_points(1)-fullrank_count(1);
@@ -95,15 +79,12 @@ fprintf('  full rank: %d/%d; overall min singular value: %.9e\n', ...
 fprintf('  interior minimum: %.9e; boundary minimum: %.9e\n', ...
     min_sigma_interior(1), min_sigma_boundary(1));
 
-% Use a fixed seed for reproducible INDEPENDENT supplementary LHS blocks.
-% The UNION of blocks is not itself a single N-point Latin hypercube.
 rng(20261023, 'twister');
 
 for level = 2:n_levels
     N_new = interior_levels(level)-interior_levels(level-1);
     new_point_count(level) = N_new;
 
-    % Elementary randomized Latin hypercube sampling (toolbox-free)
     U = zeros(N_new,2);
     for j = 1:2
         U(:,j) = (randperm(N_new)' - rand(N_new,1))/N_new;
@@ -140,7 +121,6 @@ for level = 2:n_levels
         end
     end
 
-    % Each new point is inside the parameter rectangle
     theta_all = [theta_all; new_points];
     sigma_all = [sigma_all; sigma_new];
     rank_all = [rank_all; rank_new];
@@ -175,7 +155,6 @@ for level = 2:n_levels
             bad(i_bad), failure_messages{bad(i_bad)});
     end
 
-    % Save a checkpoint after EACH batch, including all results already computed
     summary = table(interior_levels(:), repmat(edge_count,n_levels,1), ...
         total_points, new_point_count, fullrank_count, failure_count, ...
         min_sigma_new, min_sigma_interior, min_sigma_boundary, min_sigma_all, ...
@@ -195,7 +174,6 @@ disp(summary);
 fprintf('Saved summary: %s\nSaved results: %s\n', ...
     summary_file, results_file);
 
-%% The same shooting and reduced-Jacobian functions used in the previous test
 
 function [F_0, r_star, has_F0] = get_force_new(numeric_param, truth_value, u_target, F_init)
 
@@ -203,10 +181,8 @@ function [F_0, r_star, has_F0] = get_force_new(numeric_param, truth_value, u_tar
         F_0 = get_force_consistent(numeric_param, truth_value, u_target, F_init);
         F_0 = F_0(1);
 
-        % 使用与灵敏度方程相同的高精度再次检查边界残差
         r_star = boundary_residual(F_0, numeric_param, truth_value, u_target);
 
-        % 原非线性约束为 r^2 <= 1e-6，因此等价于 |r| <= 1e-3
         res_tol = 1e-3;
         has_F0 = isfinite(F_0) && isfinite(r_star) && abs(r_star) <= res_tol;
 
